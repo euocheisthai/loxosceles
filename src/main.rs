@@ -6,136 +6,16 @@ use std::{
     io::Write,
     path::Path,
 };
-use teloxide::{
-    dispatching::dialogue::InMemStorage,
-    prelude::Dialogue,
-    prelude::*,
-    types::{InlineKeyboardButton, InlineKeyboardMarkup},
-    utils::command::BotCommands,
-};
+use teloxide::{dispatching::dialogue::InMemStorage, prelude::*, utils::command::BotCommands};
 use teloxide_core::types::Message;
 use tokio;
 
 mod models;
 use models::{ChannelConfig, LoxoRC, LoxoUser, StorageType, StorageTypeCallback};
-
-// -------------------------------------------------------- dialogue
-type MyDialogue = Dialogue<State, InMemStorage<State>>;
-type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
-
-#[derive(Clone, Default)]
-pub enum State {
-    #[default]
-    DialogueStart,
-    DialogueStalk,
-    DialogueSetStorage {
-        storage_type: StorageType,
-    },
-}
-
-// 1
-async fn dialogue_start(bot: Bot, dialogue: MyDialogue, msg: Message) -> HandlerResult {
-    log::info!("dialogue_start function used");
-
-    bot.send_message(msg.chat.id, "Let's start! which user do u wanna stalk?")
-        .await?;
-    dialogue.update(State::DialogueStalk).await?;
-    Ok(())
-}
-
-// 2
-async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> HandlerResult {
-    log::info!("dialogue_stalk function used");
-
-    let keyboard = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback(
-            "Google Drive".to_owned(),
-            serde_json::to_string(&StorageTypeCallback {
-                storage_type: StorageType::GoogleDrive,
-            })
-            .unwrap(),
-        ),
-        InlineKeyboardButton::callback(
-            "Yandex360".to_owned(),
-            serde_json::to_string(&StorageTypeCallback {
-                storage_type: StorageType::Yandex360,
-            })
-            .unwrap(),
-        ),
-        InlineKeyboardButton::callback(
-            "Local".to_owned(),
-            serde_json::to_string(&StorageTypeCallback {
-                storage_type: StorageType::Local,
-            })
-            .unwrap(),
-        ),
-    ]]);
-
-    bot.send_message(msg.chat.id, "Okay, now select your storage:")
-        .reply_markup(keyboard)
-        .await?;
-
-    Ok(())
-}
-
-// 3.1
-async fn handle_storage_callback(
-    bot: Bot,
-    dialogue: MyDialogue,
-    q: CallbackQuery,
-    data: StorageTypeCallback,
-) -> HandlerResult {
-    log::info!("handle_storage_callback function used");
-
-    if let Some(msg) = q.message {
-        bot.send_message(
-            msg.chat().id,
-            format!("u chose {:?} storage.", data.storage_type),
-        )
-        .await?;
-
-        // normaly this dialogue.update would be in dialogue_stalk
-        dialogue
-            .update(State::DialogueSetStorage {
-                storage_type: data.storage_type,
-            })
-            .await?;
-        Ok(())
-    } else {
-        // bot.send_message(q.unwrap(), "sth wrong with the button click.").await?;
-        log::error!("something went wrong w buttons");
-        Ok(())
-    }
-}
-
-// 3.2 - only gets triggered by fn handle_storage_callback
-// storage_type is available from State::DialogueSetStorage, bc handle_storage_callback sets State to DialogueSetStorage
-async fn dialogue_set_storage(
-    bot: Bot,
-    dialogue: MyDialogue,
-    msg: Message,
-    storage_type: StorageType,
-) -> HandlerResult {
-    log::info!(
-        "dialogue_set_storage function used and {:#?} set as storage",
-        storage_type
-    );
-
-    match msg.text().map(|text| text.parse::<u8>()) {
-        Some(Ok(storage)) => {
-            bot.send_message(msg.chat.id, "i thikn we're done at this point")
-                .await?
-        }
-        _ => {
-            bot.send_message(msg.chat.id, "idk send storage type or something.")
-                .await?
-        }
-    };
-
-    Ok(())
-}
-
-//--------------------------------------------------^ dialogue
+mod dialogues;
+use dialogues::{
+    State, dialogue_set_storage, dialogue_stalk, dialogue_start, handle_storage_callback,
+};
 
 #[derive(BotCommands, Clone)]
 #[command(
