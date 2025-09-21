@@ -91,7 +91,8 @@ pub async fn handle_storage_callback(
                 }
                 Err(err) => {
                     log::error!("Failed to parse StorageTypeCallback: {:?}", err);
-                    bot.send_message(msg.chat().id, "Invalid selection.").await?;
+                    bot.send_message(msg.chat().id, "Invalid selection.")
+                        .await?;
                 }
             }
         }
