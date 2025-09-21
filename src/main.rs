@@ -1,3 +1,4 @@
+use crate::dialogues::HandlerResult;
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -6,7 +7,12 @@ use std::{
     io::Write,
     path::Path,
 };
-use teloxide::{dispatching::dialogue::InMemStorage, prelude::*, utils::command::BotCommands};
+use teloxide::{
+    dispatching::UpdateHandler,
+    dispatching::{dialogue, dialogue::InMemStorage},
+    prelude::*,
+    utils::command::BotCommands,
+};
 use teloxide_core::types::Message;
 use tokio;
 
@@ -25,31 +31,36 @@ use dialogues::{
 enum Command {
     #[command(description = "Display help.")]
     Help,
+    // command /start, should kickstart a dialogue
     #[command(description = "Stalk a channel.")]
-    Stalk { channel_id: String },
+    Stalk,
     #[command(description = "Set default cloud storage.")]
     Storage { storage: String },
 }
 
-async fn answer(bot: Bot, msg: Message, cmd: Command) -> ResponseResult<()> {
-    match cmd {
-        Command::Help => {
-            bot.send_message(msg.chat.id, Command::descriptions().to_string())
-                .await?
-        }
-        Command::Stalk { channel_id } => {
-            bot.send_message(msg.chat.id, format!("you wanna stalk: {channel_id}"))
-                .await?
-        }
-        Command::Storage { storage } => {
-            bot.send_message(msg.chat.id, format!("selected storage: {storage}"))
-                .await?
-        }
-    };
-
+async fn display_help(bot: Bot, msg: Message) -> HandlerResult {
+    bot.send_message(msg.chat.id, Command::descriptions().to_string())
+        .await?;
     Ok(())
 }
 
+// placeholder
+async fn set_default_storage(bot: Bot, msg: Message, storage: String) -> HandlerResult {
+    bot.send_message(msg.chat.id, format!("Default storage set to: {storage}"))
+        .await?;
+    Ok(())
+}
+
+async fn invalid_state(bot: Bot, msg: Message) -> HandlerResult {
+    bot.send_message(
+        msg.chat.id,
+        "Unable to handle the message. Type /help to see the usage.",
+    )
+    .await?;
+    Ok(())
+}
+
+// ---------------------------- test input section
 fn test_input() -> () {
     let mut rc_file: Result<File, std::io::Error> = init_rc();
     let user1 = LoxoUser {
@@ -97,9 +108,32 @@ fn log_request(message: &str, username: Option<&str>) -> std::io::Result<()> {
     Ok(())
 }
 
-// fn get_user_config(username: String) -> LoxoRC {
-//     Ok(())
-// }
+// ---------------------------- test input section
+
+fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
+    use dptree::case;
+
+    let command_handler = teloxide::filter_command::<Command, _>()
+        .branch(case![Command::Help].endpoint(display_help))
+        // this one kickstarts the main dialogue
+        .branch(case![Command::Stalk].endpoint(dialogue_start))
+        .branch(case![Command::Storage { storage }].endpoint(set_default_storage));
+
+    let message_handler = Update::filter_message()
+        .branch(command_handler)
+        // if state is currently at DialogueStalk, move to dialogue_stalk
+        .branch(case![State::DialogueStalk].endpoint(dialogue_stalk))
+        // if state is currently DialogueSetStorage, move to dialogue_set_storage
+        .branch(case![State::DialogueSetStorage { storage_type }].endpoint(dialogue_set_storage))
+        .branch(dptree::endpoint(invalid_state));
+
+    let callback_query_handler =
+        Update::filter_callback_query().branch(dptree::endpoint(handle_storage_callback));
+
+    dialogue::enter::<Update, InMemStorage<State>, State, _>()
+        .branch(message_handler)
+        .branch(callback_query_handler)
+}
 
 #[tokio::main]
 async fn main() {
@@ -119,27 +153,10 @@ async fn main() {
     test_input();
     // === test input ^
 
-    Command::repl(
-        bot.clone(),
-        move |bot: Bot, msg: Message, cmd: Command| async move { answer(bot, msg, cmd).await },
-    )
-    .await;
-
-    Dispatcher::builder(
-        bot,
-        Update::filter_message()
-            .enter_dialogue::<Message, InMemStorage<State>, State>()
-            .branch(dptree::case![State::DialogueStart].endpoint(dialogue_start))
-            .branch(dptree::case![State::DialogueStalk].endpoint(dialogue_stalk))
-            .branch(
-                dptree::case![State::DialogueSetStorage { storage_type }]
-                    .endpoint(dialogue_set_storage),
-            )
-            .branch(Update::filter_callback_query().endpoint(handle_storage_callback)),
-    )
-    .dependencies(dptree::deps![InMemStorage::<State>::new()])
-    .enable_ctrlc_handler()
-    .build()
-    .dispatch()
-    .await;
+    Dispatcher::builder(bot, schema())
+        .dependencies(dptree::deps![InMemStorage::<State>::new()])
+        .enable_ctrlc_handler()
+        .build()
+        .dispatch()
+        .await;
 }

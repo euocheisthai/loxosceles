@@ -70,25 +70,34 @@ pub async fn handle_storage_callback(
     bot: Bot,
     dialogue: MyDialogue,
     q: CallbackQuery,
-    data: StorageTypeCallback,
 ) -> HandlerResult {
     log::info!("handle_storage_callback function used");
 
     if let Some(msg) = q.message {
-        bot.send_message(
-            msg.chat().id,
-            format!("u chose {:?} storage.", data.storage_type),
-        )
-        .await?;
+        if let Some(data_str) = q.data {
+            match serde_json::from_str::<StorageTypeCallback>(&data_str) {
+                Ok(data) => {
+                    bot.send_message(
+                        msg.chat().id,
+                        format!("u chose {:?} storage.", data.storage_type),
+                    )
+                    .await?;
 
-        dialogue
-            .update(State::DialogueSetStorage {
-                storage_type: data.storage_type,
-            })
-            .await?;
+                    dialogue
+                        .update(State::DialogueSetStorage {
+                            storage_type: data.storage_type,
+                        })
+                        .await?;
+                }
+                Err(err) => {
+                    log::error!("Failed to parse StorageTypeCallback: {:?}", err);
+                    bot.send_message(msg.chat().id, "Invalid selection.").await?;
+                }
+            }
+        }
         Ok(())
     } else {
-        log::error!("something went wrong w buttons");
+        log::error!("something went wrong w buttons (no message)");
         Ok(())
     }
 }
