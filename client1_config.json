@@ -1,0 +1,23 @@
+{
+    "default_storage": "GoogleDrive",
+    "loxo_users": [
+        {
+            "channel_id": "some_channel",
+            "channel_config": {
+                "storage": "Yandex360",
+                "update_every": "1h",
+                "last_update": "2012-12-28T18:12:33+01:00"
+            }
+
+        },
+        {
+            "channel_id": "another_channel",
+            "channel_config": {
+                "storage": "GoogleDrive",
+                "update_every": "2h",
+                "last_update": "2015-11-21T18:12:33+01:00"
+            }
+
+        }
+    ]
+}

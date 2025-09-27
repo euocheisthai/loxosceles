@@ -17,10 +17,9 @@ use teloxide_core::types::Message;
 use tokio;
 
 mod models;
-use models::{ChannelConfig, LoxoRC, LoxoUser, StorageType, StorageTypeCallback};
 mod dialogues;
 use dialogues::{
-    State, dialogue_set_storage, dialogue_stalk, dialogue_start, handle_storage_callback,
+    State, dialogue_stalk, dialogue_start, handle_storage_callback,
 };
 
 mod test_input;
@@ -34,7 +33,6 @@ use test_input::{init_rc, test_input};
 enum Command {
     #[command(description = "Display help.")]
     Help,
-    // command /start, should kickstart a dialogue
     #[command(description = "Stalk a channel.")]
     Stalk,
     #[command(description = "Set default cloud storage.")]
@@ -57,7 +55,7 @@ async fn set_default_storage(bot: Bot, msg: Message, storage: String) -> Handler
 async fn invalid_state(bot: Bot, msg: Message) -> HandlerResult {
     bot.send_message(
         msg.chat.id,
-        "Unable to handle the message. Type /help to see the usage.",
+        "Unable to handle the message. Type /help to see command options. Or wallow in despair, because what you want is not implemented yet!",
     )
     .await?;
     Ok(())
@@ -68,20 +66,19 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Help].endpoint(display_help))
-        // this one kickstarts the main dialogue
+
+        // this one kickstarts the main dialogue and sets the state to DialogueStalk. State cases are handed in message_handler over there
         .branch(case![Command::Stalk].endpoint(dialogue_start))
         .branch(case![Command::Storage { storage }].endpoint(set_default_storage));
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
-        // if state is currently at DialogueStalk, move to dialogue_stalk
         .branch(case![State::DialogueStalk].endpoint(dialogue_stalk))
-        // if state is currently DialogueSetStorage, move to dialogue_set_storage
-        .branch(case![State::DialogueSetStorage { storage_type }].endpoint(dialogue_set_storage))
+        //.branch(case![State::DialogueSetStorage { storage_type }].endpoint(dialogue_set_storage))
         .branch(dptree::endpoint(invalid_state));
 
     let callback_query_handler =
-        Update::filter_callback_query().branch(dptree::endpoint(handle_storage_callback));
+        Update::filter_callback_query().branch(dptree::endpoint(handle_storage_callback));      // right now missing a state in which this branch is triggered
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(message_handler)

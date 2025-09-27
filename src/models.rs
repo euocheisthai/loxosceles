@@ -12,23 +12,24 @@ use strum::EnumString;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")] 
 pub struct LoxoRC {
-    pub loxo_configs: Vec<LoxoUser>
+    pub default_storage: Option<StorageType>,
+    pub loxo_users: Vec<LoxoUser>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")] 
 pub struct LoxoUser {
     pub channel_id: String,
-    pub config: ChannelConfig
+    pub channel_config: ChannelConfig
 }
 
+// TODO: set dates as PrimitiveDateTime,
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")] 
 pub struct ChannelConfig {
-    // TODO: set dates as PrimitiveDateTime,
+    pub storage: StorageType,
     pub last_update: i32,
-    pub update_every: i32,
-    pub storage: StorageType
+    pub update_every: i32
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, EnumString)]

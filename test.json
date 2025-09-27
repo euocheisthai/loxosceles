@@ -1,8 +1,0 @@
-{
-    "channel_id": "my_channel",
-    "config": {
-        "last_update": "10",
-        "update_every": "20",
-        "storage": "GoogleDrive"
-        }
-}

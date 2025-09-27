@@ -11,7 +11,7 @@ pub fn test_input() -> () {
     let mut rc_file: Result<File, std::io::Error> = init_rc();
     let user1 = LoxoUser {
         channel_id: String::from("some_channel"),
-        config: ChannelConfig {
+        channel_config: ChannelConfig {
             last_update: 10,
             update_every: 20,
             storage: StorageType::GoogleDrive,

@@ -15,9 +15,7 @@ pub enum State {
     #[default]
     DialogueStart,
     DialogueStalk,
-    DialogueSetStorage {
-        storage_type: StorageType,
-    },
+    DialogueSetStorage
 }
 
 // 1
@@ -62,10 +60,12 @@ pub async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
         .reply_markup(keyboard)
         .await?;
 
+    dialogue.update(State::DialogueSetStorage).await?;
+
     Ok(())
 }
 
-// 3.1
+// 3, gets triggered on button click
 pub async fn handle_storage_callback(
     bot: Bot,
     dialogue: MyDialogue,
@@ -83,11 +83,6 @@ pub async fn handle_storage_callback(
                     )
                     .await?;
 
-                    dialogue
-                        .update(State::DialogueSetStorage {
-                            storage_type: data.storage_type,
-                        })
-                        .await?;
                 }
                 Err(err) => {
                     log::error!("Failed to parse StorageTypeCallback: {:?}", err);
@@ -103,28 +98,3 @@ pub async fn handle_storage_callback(
     }
 }
 
-// 3.2
-pub async fn dialogue_set_storage(
-    bot: Bot,
-    _dialogue: MyDialogue,
-    msg: Message,
-    storage_type: StorageType,
-) -> HandlerResult {
-    log::info!(
-        "dialogue_set_storage function used and {:#?} set as storage",
-        storage_type
-    );
-
-    match msg.text().map(|text| text.parse::<u8>()) {
-        Some(Ok(_storage)) => {
-            bot.send_message(msg.chat.id, "i thikn we're done at this point")
-                .await?
-        }
-        _ => {
-            bot.send_message(msg.chat.id, "idk send storage type or something.")
-                .await?
-        }
-    };
-
-    Ok(())
-}
