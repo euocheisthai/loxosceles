@@ -1,11 +1,6 @@
-use core::fmt;
-use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::Write;
 use strum::EnumString;
-use teloxide::types::{ChatId, Recipient};
-use time::PrimitiveDateTime;
+use teloxide::types::{Recipient};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -26,7 +21,7 @@ pub struct LoxoUser {
 #[serde(rename_all = "lowercase")]
 pub struct ChannelConfig {
     pub storage: StorageType,
-    pub last_update: i32,
+    pub last_update: i32,               // actually chrono::Utc
     pub update_every: i32,
 }
 

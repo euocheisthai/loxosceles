@@ -1,11 +1,12 @@
-use crate::models::{StorageType, StorageTypeCallback};
-use serde::{Deserialize, Serialize};
+use crate::models::{LoxoRC, LoxoUser, ChannelConfig, StorageType, StorageTypeCallback};
 use teloxide::{
     dispatching::dialogue::InMemStorage,
     prelude::Dialogue,
     prelude::*,
     types::{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, ChatId, Recipient},
 };
+use chrono::Utc;
+use std::{env, fs::{File, OpenOptions}, io::{self, Write}, path::{PathBuf}};
 
 pub type MyDialogue = Dialogue<State, InMemStorage<State>>;
 pub type HandlerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
@@ -29,8 +30,7 @@ pub async fn dialogue_start(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
 
     let client_chat_id  = dialogue.chat_id();
 
-    bot.send_message(msg.chat.id, format!("Let's start! which user do u wanna stalk?\n\nCurrent chat id is {:?}", client_chat_id))
-        .await?;
+    bot.send_message(msg.chat.id, format!("Let's start! which user do u wanna stalk?\n\nCurrent chat id is {:?}", client_chat_id)).await?;
     dialogue.update(State::DialogueStalk { client_chat_id }).await?;
     Ok(())
 }
@@ -50,8 +50,7 @@ pub async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
     // checking if user input is a Recipient::ChannelUsername variant then proceeding w/button input
     if let Some(username) = msg.text() {
         if username.contains(' ') {
-            bot.send_message(msg.chat.id, "username can't contain spaces")
-                .await?;
+            bot.send_message(msg.chat.id, "username can't contain spaces").await?;
             return Ok(());
         }
         let target_channel_username = Recipient::ChannelUsername(username.to_string());
@@ -87,20 +86,19 @@ pub async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
     
         dialogue.update(State::DialogueSetStorage { client_chat_id, target_channel_username }).await?;
     } else {
-        bot.send_message(msg.chat.id, "sry, invalid channel username, try again")
-        .await?;
+        bot.send_message(msg.chat.id, "sry, invalid channel username, try again").await?;
     };
 
     Ok(())
 }
 
 // 3, gets triggered on button click
-pub async fn handle_storage_callback(
+pub async fn dialogue_storage_callback(
     bot: Bot,
     dialogue: MyDialogue,
     q: CallbackQuery,
 ) -> HandlerResult {
-    log::info!("handle_storage_callback function used");
+    log::info!("dialogue_storage_callback function used");
 
     // retrieving state xdd [2]
     let current_state = dialogue.get().await?.unwrap();
@@ -116,17 +114,20 @@ pub async fn handle_storage_callback(
         if let Some(data_str) = q.data {
             match serde_json::from_str::<StorageTypeCallback>(&data_str) {
                 Ok(data) => {
+                    let storage = data.storage_type;
                     bot.send_message(
                         msg.chat().id,
-                        format!("u chose {:?} storage. saving your config.\n\ncurrent chat id: {:?}, stalking {:?}", data.storage_type, client_chat_id, target_channel_username),
+                        format!("u chose {:?} storage. saving your config.\n\ncurrent chat id: {:?}, stalking {:?}", storage, client_chat_id, target_channel_username),
                     )
                     .await?;
+
+                // WIP
+                save_loxorc(client_chat_id, target_channel_username, storage).await?;
 
                 }
                 Err(err) => {
                     log::error!("Failed to parse StorageTypeCallback: {:?}", err);
-                    bot.send_message(msg.chat().id, "Invalid selection.")
-                        .await?;
+                    bot.send_message(msg.chat().id, "Invalid selection.").await?;
                 }
             }
         }
@@ -137,6 +138,26 @@ pub async fn handle_storage_callback(
     }
 }
 
-// pub async fn save_config(client_chat_id: ChatId, target_channel_id, storage) {
+// WIP per-client config that will end up in mongo
+pub async fn save_loxorc(client_chat_id: ChatId, target_channel_username: Recipient, storage: StorageType) -> io::Result<()> {
     
-// }
+    let loxo_rc_path: PathBuf = env::temp_dir().join(PathBuf::from(format!("{}_config.json", client_chat_id)));
+    let mut loxo_rc_file: File = OpenOptions::new().create(true).append(true).open(&loxo_rc_path)?;
+
+    let loxo_rc: LoxoRC = LoxoRC {
+        default_storage: None,
+        loxo_users: vec![LoxoUser {
+            target_channel_username: target_channel_username,
+            target_channel_config: ChannelConfig {
+                storage,
+                last_update: Utc::now().timestamp() as i32,     // placeholder!
+                update_every: 3600,                             // placeholder!
+            },
+        }],
+    };
+
+    let loxo_json = serde_json::to_string_pretty(&loxo_rc)?;
+    loxo_rc_file.write_all(loxo_json.as_bytes()).unwrap();
+
+    Ok(())
+}

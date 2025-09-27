@@ -1,11 +1,7 @@
 use crate::dialogues::HandlerResult;
-use chrono::Local;
-use serde::{Deserialize, Serialize};
 use std::{
     env,
-    fs::{File, OpenOptions},
-    io::Write,
-    path::Path,
+    fs::{File},
 };
 use teloxide::{
     dispatching::UpdateHandler,
@@ -16,10 +12,13 @@ use teloxide::{
 use teloxide_core::types::Message;
 use tokio;
 
-mod models;
 mod dialogues;
+mod models;
 use dialogues::{
-    State, dialogue_stalk, dialogue_start, handle_storage_callback, // dialogue_done
+    State,
+    dialogue_stalk,
+    dialogue_start,
+    dialogue_storage_callback
 };
 
 mod test_input;
@@ -61,14 +60,11 @@ async fn invalid_state(bot: Bot, msg: Message) -> HandlerResult {
     Ok(())
 }
 
-
-
 fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
     use dptree::case;
 
     let command_handler = teloxide::filter_command::<Command, _>()
         .branch(case![Command::Help].endpoint(display_help))
-
         // this one kickstarts the main dialogue and sets the state to DialogueStalk. State cases are handed in message_handler over there
         .branch(case![Command::Stalk].endpoint(dialogue_start))
         .branch(case![Command::Storage { storage }].endpoint(set_default_storage));
@@ -76,11 +72,10 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
     let message_handler = Update::filter_message()
         .branch(command_handler)
         .branch(case![State::DialogueStalk { client_chat_id }].endpoint(dialogue_stalk))
-        // .branch(case![State::DialogueDone { client_chat_id }].endpoint(dialogue_done))
         .branch(dptree::endpoint(invalid_state));
 
     let callback_query_handler =
-        Update::filter_callback_query().branch(dptree::endpoint(handle_storage_callback));
+        Update::filter_callback_query().branch(dptree::endpoint(dialogue_storage_callback));
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(message_handler)
@@ -101,7 +96,7 @@ async fn main() {
     let bot = Bot::from_env();
 
     // === test input
-    let mut rc_file: Result<File, std::io::Error> = init_rc();
+    let _rc_file: Result<File, std::io::Error> = init_rc();
     test_input();
     // === test input ^
 
