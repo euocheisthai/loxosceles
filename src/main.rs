@@ -19,7 +19,7 @@ use tokio;
 mod models;
 mod dialogues;
 use dialogues::{
-    State, dialogue_stalk, dialogue_start, handle_storage_callback,
+    State, dialogue_stalk, dialogue_start, handle_storage_callback, // dialogue_done
 };
 
 mod test_input;
@@ -61,6 +61,8 @@ async fn invalid_state(bot: Bot, msg: Message) -> HandlerResult {
     Ok(())
 }
 
+
+
 fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>> {
     use dptree::case;
 
@@ -73,12 +75,12 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
-        .branch(case![State::DialogueStalk].endpoint(dialogue_stalk))
-        //.branch(case![State::DialogueSetStorage { storage_type }].endpoint(dialogue_set_storage))
+        .branch(case![State::DialogueStalk { client_chat_id }].endpoint(dialogue_stalk))
+        // .branch(case![State::DialogueDone { client_chat_id }].endpoint(dialogue_done))
         .branch(dptree::endpoint(invalid_state));
 
     let callback_query_handler =
-        Update::filter_callback_query().branch(dptree::endpoint(handle_storage_callback));      // right now missing a state in which this branch is triggered
+        Update::filter_callback_query().branch(dptree::endpoint(handle_storage_callback));
 
     dialogue::enter::<Update, InMemStorage<State>, State, _>()
         .branch(message_handler)
