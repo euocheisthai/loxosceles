@@ -24,6 +24,9 @@ use dialogues::{
 mod test_input;
 use test_input::{init_rc, test_input};
 
+mod loxosceles_mongo;
+use loxosceles_mongo::establish_mongo_connection;
+
 #[derive(BotCommands, Clone)]
 #[command(
     rename_rule = "lowercase",
@@ -44,7 +47,7 @@ async fn display_help(bot: Bot, msg: Message) -> HandlerResult {
     Ok(())
 }
 
-// placeholder
+// TODO; placeholder
 async fn set_default_storage(bot: Bot, msg: Message, storage: String) -> HandlerResult {
     bot.send_message(msg.chat.id, format!("Default storage set to: {storage}"))
         .await?;
@@ -92,6 +95,13 @@ async fn main() {
         }
     }
     pretty_env_logger::init();
+
+    let mongo_conn_result = establish_mongo_connection().await;
+    let _mongo_conn = match mongo_conn_result {
+        Ok(conn) => conn,
+        Err(error) => panic!("Failed to establish mongodb connection :(\n {}", error)
+    };
+
     log::info!("Starting loxosceles bot...");
     let bot = Bot::from_env();
 
