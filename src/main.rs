@@ -1,7 +1,6 @@
 use crate::dialogues::HandlerResult;
 use std::{
     env,
-    fs::{File},
 };
 use teloxide::{
     dispatching::UpdateHandler,
@@ -20,9 +19,6 @@ use dialogues::{
     dialogue_start,
     dialogue_storage_callback
 };
-
-mod test_input;
-use test_input::{init_rc, test_input};
 
 mod loxosceles_mongo;
 use loxosceles_mongo::establish_mongo_connection;
@@ -74,7 +70,7 @@ fn schema() -> UpdateHandler<Box<dyn std::error::Error + Send + Sync + 'static>>
 
     let message_handler = Update::filter_message()
         .branch(command_handler)
-        .branch(case![State::DialogueStalk { client_chat_id }].endpoint(dialogue_stalk))
+        .branch(case![State::DialogueStalk { client_chat_id, client_user_id }].endpoint(dialogue_stalk))
         .branch(dptree::endpoint(invalid_state));
 
     let callback_query_handler =
@@ -104,11 +100,6 @@ async fn main() {
 
     log::info!("Starting loxosceles bot...");
     let bot = Bot::from_env();
-
-    // === test input
-    let _rc_file: Result<File, std::io::Error> = init_rc();
-    test_input();
-    // === test input ^
 
     Dispatcher::builder(bot, schema())
         .dependencies(dptree::deps![InMemStorage::<State>::new()])

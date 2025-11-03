@@ -3,7 +3,7 @@ use teloxide::{
     dispatching::dialogue::InMemStorage,
     prelude::Dialogue,
     prelude::*,
-    types::{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, ChatId, Recipient},
+    types::{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, ChatId, Recipient, User},
 };
 use chrono::Utc;
 use std::{env, fs::{File, OpenOptions}, io::{self, Write}, path::{PathBuf}};
@@ -17,10 +17,12 @@ pub enum State {
     DialogueStart,
     DialogueStalk {
         client_chat_id: ChatId,
+        client_user_id: Option<User>
     },
     DialogueSetStorage {
         client_chat_id: ChatId,
-        target_channel_username: Recipient
+        client_user_id: Option<User>,
+        target_username: Recipient
     }
 }
 
@@ -28,10 +30,11 @@ pub enum State {
 pub async fn dialogue_start(bot: Bot, dialogue: MyDialogue, msg: Message) -> HandlerResult {
     log::info!("dialogue_start function used");
 
-    let client_chat_id  = dialogue.chat_id();
+    let client_chat_id: ChatId  = dialogue.chat_id();
+    let client_user_id: Option<User> = msg.from;    // gotta match None later
 
     bot.send_message(msg.chat.id, format!("Let's start! which user do u wanna stalk?\n\nCurrent chat id is {:?}", client_chat_id)).await?;
-    dialogue.update(State::DialogueStalk { client_chat_id }).await?;
+    dialogue.update(State::DialogueStalk { client_chat_id, client_user_id }).await?;
     Ok(())
 }
 
@@ -41,8 +44,8 @@ pub async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
 
     // retrieving state xdd [1]
     let current_state = dialogue.get().await?.unwrap();
-    let client_chat_id = if let State::DialogueStalk { client_chat_id } = current_state {
-        client_chat_id
+    let (client_chat_id, client_user_id) = if let State::DialogueStalk { client_chat_id, client_user_id } = current_state {
+        (client_chat_id, client_user_id)
     } else {
         return Ok(());
     };
@@ -53,7 +56,8 @@ pub async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
             bot.send_message(msg.chat.id, "username can't contain spaces").await?;
             return Ok(());
         }
-        let target_channel_username = Recipient::ChannelUsername(username.to_string());
+
+        let target_username = Recipient::ChannelUsername(username.to_string());
 
         // button input
         let keyboard = InlineKeyboardMarkup::new(vec![vec![
@@ -80,11 +84,11 @@ pub async fn dialogue_stalk(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
             ),
         ]]);
     
-        bot.send_message(msg.chat.id, format!("Okay, now select storage to save {:?}'s data to", target_channel_username))
+        bot.send_message(msg.chat.id, format!("Okay, now select storage to save {:?}'s data to", target_username))
             .reply_markup(keyboard)
             .await?;
     
-        dialogue.update(State::DialogueSetStorage { client_chat_id, target_channel_username }).await?;
+        dialogue.update(State::DialogueSetStorage { client_chat_id, client_user_id, target_username }).await?;
     } else {
         bot.send_message(msg.chat.id, "sry, invalid channel username, try again").await?;
     };
@@ -102,9 +106,9 @@ pub async fn dialogue_storage_callback(
 
     // retrieving state xdd [2]
     let current_state = dialogue.get().await?.unwrap();
-    let (client_chat_id, target_channel_username) = 
-        if let State::DialogueSetStorage { client_chat_id, target_channel_username } = current_state {
-            (client_chat_id, target_channel_username)
+    let (client_chat_id, client_user_id, target_username) = 
+        if let State::DialogueSetStorage { client_chat_id, client_user_id, target_username } = current_state {
+            (client_chat_id, client_user_id, target_username)
         } else {
             return Ok(());
         };
@@ -117,12 +121,12 @@ pub async fn dialogue_storage_callback(
                     let storage = data.storage_type;
                     bot.send_message(
                         msg.chat().id,
-                        format!("u chose {:?} storage. saving your config.\n\ncurrent chat id: {:?}, stalking {:?}", storage, client_chat_id, target_channel_username),
+                        format!("u chose {:?} storage. saving your config.\n\ncurrent chat id: {:?}, stalking {:?}", storage, client_chat_id, target_username),
                     )
                     .await?;
 
                 // WIP
-                save_loxorc(client_chat_id, target_channel_username, storage).await?;
+                save_loxorc(client_chat_id, client_user_id, target_username, storage).await?;
 
                 }
                 Err(err) => {
@@ -139,7 +143,7 @@ pub async fn dialogue_storage_callback(
 }
 
 // WIP per-client config that will end up in mongo
-pub async fn save_loxorc(client_chat_id: ChatId, target_channel_username: Recipient, storage: StorageType) -> io::Result<()> {
+pub async fn save_loxorc(client_chat_id: ChatId, client_user_id: Option<User>, target_username: Recipient, storage: StorageType) -> io::Result<()> {
     
     let loxo_rc_path: PathBuf = env::temp_dir().join(PathBuf::from(format!("{}_config.json", client_chat_id)));
     let mut loxo_rc_file: File = OpenOptions::new().create(true).append(true).open(&loxo_rc_path)?;
@@ -147,16 +151,18 @@ pub async fn save_loxorc(client_chat_id: ChatId, target_channel_username: Recipi
     let loxo_rc: LoxoRC = LoxoRC {
         default_storage: None,
         loxo_users: vec![LoxoUser {
-            target_channel_username: target_channel_username,
+            client_chat_id: client_chat_id,
+            client_user_id: client_user_id,
+            target_username: target_username,
             target_channel_config: ChannelConfig {
                 storage,
-                last_update: Utc::now().timestamp() as i32,     // placeholder!
-                update_every: 3600,                             // placeholder!
+                last_update: Some(Utc::now().timestamp() as i32),     // placeholder! don't forget to eventually start updating it 
+                update_every: Some(3600),                             // placeholder!
             },
         }],
     };
 
-    let loxo_json = serde_json::to_string_pretty(&loxo_rc)?;
+    let loxo_json = serde_json::to_string_pretty(&loxo_rc.loxo_users)?; // the one goes to mongo
     loxo_rc_file.write_all(loxo_json.as_bytes()).unwrap();
 
     Ok(())

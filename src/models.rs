@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use strum::EnumString;
-use teloxide::types::{Recipient};
+use teloxide::types::{Recipient, ChatId, User};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -12,7 +12,9 @@ pub struct LoxoRC {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub struct LoxoUser {
-    pub target_channel_username: Recipient,
+    pub client_chat_id: ChatId,
+    pub client_user_id: Option<User>,
+    pub target_username: Recipient,
     pub target_channel_config: ChannelConfig,
 }
 
@@ -21,8 +23,8 @@ pub struct LoxoUser {
 #[serde(rename_all = "lowercase")]
 pub struct ChannelConfig {
     pub storage: StorageType,
-    pub last_update: i32,               // actually chrono::Utc
-    pub update_every: i32,
+    pub last_update: Option<i32>,
+    pub update_every: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, EnumString)]
