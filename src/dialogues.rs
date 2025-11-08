@@ -1,4 +1,6 @@
-use crate::models::{LoxoRC, LoxoUser, ChannelConfig, StorageType, StorageTypeCallback};
+use crate::models::{LoxoRC, LoxoUserConfig, ChannelConfig, StorageType, StorageTypeCallback};
+use crate::loxosceles_mongo::{establish_mongo_connection, write_to_collection};
+
 use teloxide::{
     dispatching::dialogue::InMemStorage,
     prelude::Dialogue,
@@ -31,7 +33,7 @@ pub async fn dialogue_start(bot: Bot, dialogue: MyDialogue, msg: Message) -> Han
     log::info!("dialogue_start function used");
 
     let client_chat_id: ChatId  = dialogue.chat_id();
-    let client_user_id: Option<User> = msg.from;    // gotta match None later
+    let client_user_id: Option<User> = msg.from;    // YODO: gotta match None later
 
     bot.send_message(msg.chat.id, format!("Let's start! which user do u wanna stalk?\n\nCurrent chat id is {:?}", client_chat_id)).await?;
     dialogue.update(State::DialogueStalk { client_chat_id, client_user_id }).await?;
@@ -125,7 +127,7 @@ pub async fn dialogue_storage_callback(
                     )
                     .await?;
 
-                // WIP
+                // WIP - writing to mongo
                 save_loxorc(client_chat_id, client_user_id, target_username, storage).await?;
 
                 }
@@ -145,12 +147,12 @@ pub async fn dialogue_storage_callback(
 // WIP per-client config that will end up in mongo
 pub async fn save_loxorc(client_chat_id: ChatId, client_user_id: Option<User>, target_username: Recipient, storage: StorageType) -> io::Result<()> {
     
-    let loxo_rc_path: PathBuf = env::temp_dir().join(PathBuf::from(format!("{}_config.json", client_chat_id)));
-    let mut loxo_rc_file: File = OpenOptions::new().create(true).append(true).open(&loxo_rc_path)?;
+    // let loxo_rc_path: PathBuf = env::temp_dir().join(PathBuf::from(format!("{}_config.json", client_chat_id)));
+    // let mut loxo_rc_file: File = OpenOptions::new().create(true).append(true).open(&loxo_rc_path)?;
 
     let loxo_rc: LoxoRC = LoxoRC {
         default_storage: None,
-        loxo_users: vec![LoxoUser {
+        loxo_users: vec![LoxoUserConfig {
             client_chat_id: client_chat_id,
             client_user_id: client_user_id,
             target_username: target_username,
@@ -163,7 +165,10 @@ pub async fn save_loxorc(client_chat_id: ChatId, client_user_id: Option<User>, t
     };
 
     let loxo_json = serde_json::to_string_pretty(&loxo_rc.loxo_users)?; // the one goes to mongo
-    loxo_rc_file.write_all(loxo_json.as_bytes()).unwrap();
+    // loxo_rc_file.write_all(loxo_json.as_bytes()).unwrap();
+
+    write_to_collection();
+
 
     Ok(())
 }

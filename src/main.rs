@@ -21,7 +21,7 @@ use dialogues::{
 };
 
 mod loxosceles_mongo;
-use loxosceles_mongo::establish_mongo_connection;
+use loxosceles_mongo::{establish_mongo_connection, prepare_mongo};
 
 #[derive(BotCommands, Clone)]
 #[command(
@@ -92,11 +92,16 @@ async fn main() {
     }
     pretty_env_logger::init();
 
-    let mongo_conn_result = establish_mongo_connection().await;
-    let _mongo_conn = match mongo_conn_result {
-        Ok(conn) => conn,
-        Err(error) => panic!("Failed to establish mongodb connection :(\n {}", error)
-    };
+    let (_mongo_client, mongo_database) = establish_mongo_connection()
+        .await
+        .unwrap();
+
+    // lets assume im returning N collections here and storing them in some "prepared_collections" var
+    // where do i put them?
+    // i imagine some Arc state structure? but wont the collections be mutated?
+    // the docs read "Collection uses std::sync::Arc internally, so it can safely be shared across threads or async tasks."
+    // so yeah that seems to be fine, still no idea where to store that..
+    prepare_mongo(mongo_database).await;
 
     log::info!("Starting loxosceles bot...");
     let bot = Bot::from_env();

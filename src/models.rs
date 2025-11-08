@@ -6,12 +6,12 @@ use teloxide::types::{Recipient, ChatId, User};
 #[serde(rename_all = "lowercase")]
 pub struct LoxoRC {
     pub default_storage: Option<StorageType>,
-    pub loxo_users: Vec<LoxoUser>,
+    pub loxo_users: Vec<LoxoUserConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub struct LoxoUser {
+pub struct LoxoUserConfig {
     pub client_chat_id: ChatId,
     pub client_user_id: Option<User>,
     pub target_username: Recipient,
